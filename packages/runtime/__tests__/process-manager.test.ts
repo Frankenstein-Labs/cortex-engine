@@ -7,8 +7,8 @@ describe('ProcessManager', () => {
     manager = new ProcessManager();
   });
 
-  afterEach(() => {
-    manager.killAll();
+  afterEach(async () => {
+    await manager.killAll();
   });
 
   it('should spawn and track a process', async () => {
@@ -35,8 +35,7 @@ describe('ProcessManager', () => {
   it('should kill all processes', async () => {
     manager.spawn('p1', 'node', ['-e', 'setTimeout(() => process.exit(0), 5000)']);
     manager.spawn('p2', 'node', ['-e', 'setTimeout(() => process.exit(0), 5000)']);
-    manager.killAll();
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await manager.killAll();
     expect(manager.get('p1')).toBeUndefined();
     expect(manager.get('p2')).toBeUndefined();
   });

@@ -54,9 +54,16 @@ export class ProcessManager {
             }
           }
         }
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
         await new Promise<void>((resolve) => {
-          child.once('exit', () => resolve());
-          setTimeout(resolve, 2000);
+          const onExit = () => {
+            if (timeoutHandle !== undefined) {
+              clearTimeout(timeoutHandle);
+            }
+            resolve();
+          };
+          child.once('exit', onExit);
+          timeoutHandle = setTimeout(onExit, 2000);
         });
       },
       isRunning: () => child.signalCode === null && child.exitCode === null,
@@ -73,15 +80,15 @@ export class ProcessManager {
   kill(id: string): void {
     const managed = this.processes.get(id);
     if (managed) {
-      managed.stop().catch(() => {});
       this.processes.delete(id);
+      managed.stop().catch(() => {});
     }
   }
 
-  killAll(): void {
-    for (const [id] of this.processes) {
-      this.kill(id);
-    }
+  async killAll(): Promise<void> {
+    const all = Array.from(this.processes.values());
+    this.processes.clear();
+    await Promise.all(all.map((p) => p.stop().catch(() => {})));
   }
 
   get(id: string): ManagedProcess | undefined {
