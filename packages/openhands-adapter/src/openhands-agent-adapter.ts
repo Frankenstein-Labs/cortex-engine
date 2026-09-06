@@ -160,10 +160,12 @@ export class OpenHandsAgentAdapter implements Agent {
       return { success: false, error: 'No active conversation' };
     }
 
-    return {
-      success: false,
-      error: 'OpenHands tool execution via runtime bridge not yet implemented',
-    };
+    try {
+      const data = await this.bridge.executeTool(this.conversationId, toolName, parameters);
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   async getSession(): Promise<Session> {

@@ -112,6 +112,16 @@ export class KiloRuntimeBridge implements AgentRuntimeBridge {
     return result.data;
   }
 
+  async executeTool(sessionId: string, toolName: string, parameters: Record<string, unknown>): Promise<unknown> {
+    if (!this.client) throw new Error('Kilo runtime not started');
+    const session = (this.client as { session: { command: (params: unknown) => Promise<{ data?: unknown }> } }).session;
+    const result = await session.command({
+      path: { id: sessionId },
+      body: { command: toolName, arguments: JSON.stringify(parameters) },
+    });
+    return result.data;
+  }
+
   async *streamEvents(sessionId: string): AsyncIterable<Record<string, unknown>> {
     if (!this.client) throw new Error('Kilo runtime not started');
     const event = (this.client as { event: { subscribe: () => Promise<{ stream: AsyncIterable<unknown> }> } }).event;

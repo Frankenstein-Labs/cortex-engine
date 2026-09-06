@@ -184,6 +184,21 @@ export class OpenHandsRuntimeBridge implements AgentRuntimeBridge {
     return { conversationId: sessionId, status: 'completed' };
   }
 
+  async executeTool(sessionId: string, toolName: string, parameters: Record<string, unknown>): Promise<unknown> {
+    let conversation = this.conversations.get(sessionId) as { workspace?: { executeCommand?: (command: string, cwd?: string, timeout?: number) => Promise<unknown> } } | undefined;
+    if (!conversation) {
+      if (!this.manager) throw new Error('OpenHands runtime not started');
+      const mgr = this.manager as { loadConversation: (id: string, workingDir?: string) => Promise<unknown> };
+      const loaded = await mgr.loadConversation(sessionId, this.options.workingDir) as NonNullable<typeof conversation>;
+      conversation = loaded;
+      this.conversations.set(sessionId, loaded);
+    }
+    const workspace = conversation?.workspace;
+    if (!workspace?.executeCommand) throw new Error('OpenHands conversation does not expose workspace execution');
+    const command = typeof parameters.command === 'string' ? parameters.command : `${toolName} ${JSON.stringify(parameters)}`;
+    return workspace.executeCommand(command, this.options.workingDir);
+  }
+
   async *streamEvents(sessionId: string): AsyncIterable<Record<string, unknown>> {
     const queue: Record<string, unknown>[] = [];
     const pending: { resolve?: () => void } = {};

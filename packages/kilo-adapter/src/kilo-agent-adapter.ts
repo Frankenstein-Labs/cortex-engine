@@ -203,10 +203,13 @@ export class KiloAgentAdapter implements Agent {
   async callTool(toolName: string, parameters: Record<string, unknown>): Promise<ToolResult> {
     this.state.toolCallsUsed += 1;
     this.state.lastActivityAt = new Date();
-    return {
-      success: false,
-      error: 'Kilo tool execution not yet implemented via runtime bridge',
-    };
+    if (!this.currentKiloSessionId) return { success: false, error: 'No active Kilo session' };
+    try {
+      const data = await this.bridge.executeTool(this.currentKiloSessionId, toolName, parameters);
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   async getSession(): Promise<Session> {
