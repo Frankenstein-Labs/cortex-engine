@@ -1,0 +1,22 @@
+{
+  "name": "@cortex/kilo-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@cortex/core": "workspace:*",
+    "@cortex/agent": "workspace:*",
+    "@cortex/orchestrator": "workspace:*",
+    "@cortex/runtime": "workspace:*",
+    "@cortex/tools": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}

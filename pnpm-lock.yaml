@@ -101,6 +101,56 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
+  packages/kilo-adapter:
+    dependencies:
+      '@cortex/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@cortex/core':
+        specifier: workspace:*
+        version: link:../core
+      '@cortex/orchestrator':
+        specifier: workspace:*
+        version: link:../orchestrator
+      '@cortex/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@cortex/tools':
+        specifier: workspace:*
+        version: link:../tools
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
+  packages/openhands-adapter:
+    dependencies:
+      '@cortex/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@cortex/core':
+        specifier: workspace:*
+        version: link:../core
+      '@cortex/orchestrator':
+        specifier: workspace:*
+        version: link:../orchestrator
+      '@cortex/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@cortex/tools':
+        specifier: workspace:*
+        version: link:../tools
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
   packages/orchestrator:
     dependencies:
       '@cortex/agent':
@@ -151,6 +201,28 @@ importers:
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
+  packages/vm-runtime:
+    dependencies:
+      '@cortex/core':
+        specifier: workspace:*
+        version: link:../core
+      '@cortex/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      ws:
+        specifier: ^8.16.0
+        version: 8.21.3
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      '@types/ws':
+        specifier: ^8.5.0
+        version: 8.18.1
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -853,6 +925,12 @@ packages:
 
   /@types/uuid@9.0.8:
     resolution: {integrity: sha512-jg+97EGIcY9AGHJJRaaPVgetKDsrTgbRjQ5Msgjh/DQKEFl0DtyRr/VCOyD1T2R1MNeWPK/u7JoGhlDZnKBAfA==}
+    dev: true
+
+  /@types/ws@8.18.1:
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
+    dependencies:
+      '@types/node': 20.19.43
     dev: true
 
   /@types/yargs-parser@21.0.3:
@@ -2723,6 +2801,19 @@ packages:
       imurmurhash: 0.1.4
       signal-exit: 3.0.7
     dev: true
+
+  /ws@8.21.3:
+    resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+    dev: false
 
   /y18n@5.0.8:
     resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}

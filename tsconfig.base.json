@@ -13,7 +13,19 @@
     "declarationMap": true,
     "sourceMap": true,
     "composite": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "@cortex/core": ["./packages/core/src"],
+      "@cortex/agent": ["./packages/agent/src"],
+      "@cortex/orchestrator": ["./packages/orchestrator/src"],
+      "@cortex/runtime": ["./packages/runtime/src"],
+      "@cortex/tools": ["./packages/tools/src"],
+      "@cortex/cli": ["./packages/cli/src"],
+      "@cortex/kilo-adapter": ["./packages/kilo-adapter/src"],
+      "@cortex/openhands-adapter": ["./packages/openhands-adapter/src"],
+      "@cortex/vm-runtime": ["./packages/vm-runtime/src"]
+    }
   },
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }
