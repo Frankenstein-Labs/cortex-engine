@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../core" },
+    { "path": "../agent" },
+    { "path": "../orchestrator" },
+    { "path": "../runtime" },
+    { "path": "../tools" }
+  ],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}

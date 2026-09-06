@@ -1,0 +1,33 @@
+{
+  "name": "@cortex/cli",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "cortex": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@cortex/core": "workspace:*",
+    "@cortex/agent": "workspace:*",
+    "@cortex/orchestrator": "workspace:*",
+    "@cortex/runtime": "workspace:*",
+    "@cortex/tools": "workspace:*",
+    "commander": "^11.1.0",
+    "chalk": "^5.3.0",
+    "ora": "^8.0.0",
+    "inquirer": "^9.2.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^9.0.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "@types/inquirer": "^9.0.0"
+  }
+}
