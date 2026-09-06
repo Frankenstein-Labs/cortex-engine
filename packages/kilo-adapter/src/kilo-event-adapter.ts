@@ -1,21 +1,54 @@
 import { EventBus, CortexEvent, CortexEventHandler, EventType, EntityId } from '@cortex/core';
 
-/**
- * KiloEventAdapter bridges Kilo's event system into Cortex's EventBus.
- *
- * Kilo events are:
- * - Defined via define({ type, durable?, schema })
- * - Published via EventV2.publish()
- * - Subscribed via EventV2.subscribe()
- * - Durable events stored in SQLite
- * - Streamed via SSE to clients
- */
+export interface KiloEventAdapterOptions {
+  serverUrl: string;
+  apiKey?: string;
+}
+
 export class KiloEventAdapter implements EventBus {
   private cortexHandlers: Map<EventType, Set<CortexEventHandler>> = new Map();
-  private kiloEventBus?: unknown;
+  private options: KiloEventAdapterOptions;
+  private eventSource: EventSource | null = null;
+  private connected = false;
 
-  constructor(kiloEventBus?: unknown) {
-    this.kiloEventBus = kiloEventBus;
+  constructor(options: KiloEventAdapterOptions) {
+    this.options = options;
+  }
+
+  connect(): void {
+    if (this.connected) return;
+    this.connected = true;
+
+    const url = new URL('/api/event', this.options.serverUrl);
+    if (this.options.apiKey) {
+      url.searchParams.set('token', this.options.apiKey);
+    }
+
+    this.eventSource = new EventSource(url.toString());
+
+    this.eventSource.onmessage = (event) => {
+      try {
+        const kiloEvent = JSON.parse(event.data);
+        const cortexEvent = this.mapKiloEvent(kiloEvent);
+        if (cortexEvent) {
+          this.emitToCortexHandlers(cortexEvent);
+        }
+      } catch {
+        // ignore parse errors
+      }
+    };
+
+    this.eventSource.onerror = () => {
+      this.connected = false;
+    };
+  }
+
+  disconnect(): void {
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+      this.connected = false;
+    }
   }
 
   on<T>(eventType: EventType, handler: CortexEventHandler<T>): () => void {
@@ -24,8 +57,9 @@ export class KiloEventAdapter implements EventBus {
     }
     this.cortexHandlers.get(eventType)!.add(handler as CortexEventHandler);
 
-    // TODO: Subscribe to corresponding Kilo event
-    // Example: if eventType === 'tool.called', subscribe to Tool.Called in Kilo
+    if (!this.connected) {
+      this.connect();
+    }
 
     return () => this.off(eventType, handler);
   }
@@ -35,7 +69,10 @@ export class KiloEventAdapter implements EventBus {
   }
 
   emit<T>(event: CortexEvent<T>): void {
-    // TODO: Publish to Kilo event bus if needed
+    this.emitToCortexHandlers(event);
+  }
+
+  private emitToCortexHandlers(event: CortexEvent): void {
     const handlers = this.cortexHandlers.get(event.type);
     if (handlers) {
       for (const handler of handlers) {
@@ -53,10 +90,12 @@ export class KiloEventAdapter implements EventBus {
     }
   }
 
-  /**
-   * Map Kilo event type to Cortex EventType
-   */
-  static mapKiloEventType(kiloEventType: string): EventType | null {
+  private mapKiloEvent(kiloEvent: unknown): CortexEvent | null {
+    const event = kiloEvent as { type?: string; event?: string; data?: unknown };
+    const eventType = event.type || event.event;
+
+    if (!eventType) return null;
+
     const mapping: Record<string, EventType> = {
       'SessionEvent.Prompted': 'task.created',
       'SessionEvent.PromptAdmitted': 'task.assigned',
@@ -70,8 +109,24 @@ export class KiloEventAdapter implements EventBus {
       'SessionEvent.Tool.Failed': 'tool.error',
       'SessionEvent.Compaction.Started': 'task.started',
       'SessionEvent.Compaction.Ended': 'task.completed',
+      'SessionEvent.Text.Started': 'agent.message',
+      'SessionEvent.Text.Delta': 'agent.message',
+      'SessionEvent.Text.Ended': 'agent.message',
+      'SessionEvent.Reasoning.Started': 'agent.message',
+      'SessionEvent.Reasoning.Delta': 'agent.message',
+      'SessionEvent.Reasoning.Ended': 'agent.message',
     };
 
-    return mapping[kiloEventType] || null;
+    const mappedType = mapping[eventType];
+    if (!mappedType) return null;
+
+    return {
+      id: crypto.randomUUID(),
+      type: mappedType,
+      timestamp: new Date(),
+      source: 'kilo',
+      data: event.data || kiloEvent,
+      metadata: { originalType: eventType },
+    };
   }
 }

@@ -9,7 +9,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@cortex/core": "workspace:*"
+    "@cortex/core": "workspace:*",
+    "ssh2": "^1.15.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

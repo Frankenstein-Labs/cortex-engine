@@ -113,3 +113,11 @@ export class HostRuntime implements Runtime {
     return this.ref.capabilities.includes(capability as any);
   }
 }
+
+export function createHostRuntime(): RuntimeRef {
+  return {
+    id: crypto.randomUUID(),
+    type: 'host',
+    capabilities: ['terminal', 'filesystem', 'processes'],
+  };
+}

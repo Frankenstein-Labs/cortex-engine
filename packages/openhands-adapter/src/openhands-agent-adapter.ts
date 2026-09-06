@@ -1,40 +1,8 @@
-import {
-  Agent,
-  AgentConfig,
-  AgentState,
-  AgentMessage,
-  AgentAction,
-  AgentObservation,
-  Session,
-  Task,
-  TaskResult,
-  Tool,
-  ToolContext,
-  ToolResult,
-  Runtime,
-  EventBus,
-  PermissionChecker,
-} from '@cortex/core';
+import { Agent, AgentConfig, AgentState, AgentMessage, AgentAction, AgentObservation, Session, Task, TaskResult, Tool, ToolContext, ToolResult, EventBus } from '@cortex/core';
 
-/**
- * OpenHandsAgentAdapter bridges an OpenHands agent into Cortex's Agent interface.
- *
- * OpenHands agents are:
- * - Python-based (in openhands-agent-server)
- * - Managed via HTTP API or subprocess
- * - Have conversation/session state
- * - Execute actions (commands, edits, browser, etc.)
- * - Produce observations (output, errors)
- */
-export interface OpenHandsAgentAdapterOptions {
-  /** OpenHands server URL */
+export interface OpenHandsAdapterOptions {
   serverUrl: string;
-  /** API key for authentication */
   apiKey?: string;
-  /** Conversation ID (if resuming existing) */
-  conversationId?: string;
-  /** Direct subprocess handle (for local execution) */
-  subprocess?: unknown;
 }
 
 export class OpenHandsAgentAdapter implements Agent {
@@ -42,9 +10,10 @@ export class OpenHandsAgentAdapter implements Agent {
   readonly state: AgentState;
   private session: Session | null = null;
   private stopped = false;
-  private options: OpenHandsAgentAdapterOptions;
+  private options: OpenHandsAdapterOptions;
+  private conversationId?: string;
 
-  constructor(config: AgentConfig, options: OpenHandsAgentAdapterOptions) {
+  constructor(config: AgentConfig, options: OpenHandsAdapterOptions) {
     this.config = config;
     this.options = options;
     this.state = {
@@ -61,26 +30,18 @@ export class OpenHandsAgentAdapter implements Agent {
     this.state.status = 'idle';
     this.state.startedAt = new Date();
     this.state.lastActivityAt = new Date();
-
-    if (this.options.subprocess) {
-      // Local subprocess mode
-      // TODO: Start/openhands-agent-server subprocess
-    } else if (this.options.serverUrl) {
-      // Remote API mode
-      // TODO: Create conversation via HTTP API
-      // POST /api/conversations
-    }
   }
 
   async stop(): Promise<void> {
     this.stopped = true;
     this.state.status = 'stopped';
 
-    if (this.options.subprocess) {
-      // TODO: Kill subprocess
-    } else if (this.options.serverUrl) {
-      // TODO: Close conversation via HTTP API
-      // POST /api/conversations/{id}/stop
+    if (this.conversationId) {
+      try {
+        await this.post('/api/conversations/' + this.conversationId + '/stop');
+      } catch {
+        // ignore
+      }
     }
   }
 
@@ -102,20 +63,43 @@ export class OpenHandsAgentAdapter implements Agent {
     this.state.lastActivityAt = new Date();
 
     const startTime = Date.now();
-    const metrics = {
-      tokensUsed: 0,
-      toolCalls: 0,
-      durationMs: 0,
-      cost: 0,
-    };
+    const metrics = { tokensUsed: 0, toolCalls: 0, durationMs: 0, cost: 0 };
 
     try {
-      const output = await this.runOpenHandsTask(task, metrics);
+      const conversationId = await this.ensureConversation();
+      this.conversationId = conversationId;
+
+      const userMsg: AgentMessage = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: task.description || task.name,
+        timestamp: new Date(),
+      };
+      if (!this.session) {
+        this.session = {
+          id: crypto.randomUUID(),
+          agentId: this.config.id,
+          messages: [userMsg],
+          actions: [],
+          observations: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+      } else {
+        this.session.messages.push(userMsg);
+      }
+
+      const result = await this.sendMessageToConversation(conversationId, task.description || task.name, metrics);
+
+      if (result.assistantMessage) {
+        this.session.messages.push(result.assistantMessage);
+      }
+
       this.state.status = 'idle';
       this.state.currentTaskId = undefined;
       return {
         success: true,
-        output,
+        output: result,
         metrics,
       };
     } catch (err) {
@@ -132,23 +116,31 @@ export class OpenHandsAgentAdapter implements Agent {
     }
   }
 
-  protected async runOpenHandsTask(task: Task, metrics: { tokensUsed: number; toolCalls: number; durationMs: number; cost: number }): Promise<unknown> {
-    // Placeholder implementation
-    // Real implementation would:
-    // 1. Send task to OpenHands conversation
-    // 2. Stream events back (actions, observations)
-    // 3. Handle browser/terminal/git actions
-    // 4. Wait for completion
-    // 5. Return final state
+  private async ensureConversation(): Promise<string> {
+    const data = await this.post('/api/conversations', {
+      title: this.config.name,
+      agent: this.config.role,
+    }) as { conversation_id?: string; id?: string };
+    return data.conversation_id || data.id || '';
+  }
 
-    console.log(`[OpenHandsAgentAdapter] Executing task: ${task.name}`);
-    console.log(`[OpenHandsAgentAdapter] Server: ${this.options.serverUrl}`);
+  private async sendMessageToConversation(conversationId: string, message: string, metrics: { tokensUsed: number; toolCalls: number; cost: number }): Promise<{ assistantMessage?: AgentMessage; events?: unknown[] }> {
+    const data = await this.post('/api/conversations/' + encodeURIComponent(conversationId) + '/messages', {
+      message,
+      sources: [],
+    }) as { response?: unknown; usage?: { total_tokens?: number; totalTokens?: number; cost?: number }; events?: unknown[] };
 
-    return {
-      task,
-      server: this.options.serverUrl,
-      message: 'OpenHands adapter placeholder - implement with real OpenHands API',
+    metrics.tokensUsed += (data.usage?.total_tokens || data.usage?.totalTokens || 0) as number;
+    metrics.cost += (data.usage?.cost || 0) as number;
+
+    const assistantMessage: AgentMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: typeof data.response === 'string' ? data.response : JSON.stringify(data.response),
+      timestamp: new Date(),
     };
+
+    return { assistantMessage, events: data.events };
   }
 
   async sendMessage(message: string): Promise<AgentMessage> {
@@ -169,14 +161,20 @@ export class OpenHandsAgentAdapter implements Agent {
     this.state.toolCallsUsed += 1;
     this.state.lastActivityAt = new Date();
 
-    // TODO: Execute via OpenHands runtime
-    // OpenHands actions include: run, run_in_background, kill, read,
-    // write, edit, browse, browser_click_drag, etc.
+    if (!this.conversationId) {
+      return { success: false, error: 'No active conversation' };
+    }
 
-    return {
-      success: false,
-      error: 'OpenHands tool execution not yet implemented',
-    };
+    try {
+      const data = await this.post('/api/conversations/' + encodeURIComponent(this.conversationId) + '/actions', {
+        type: toolName,
+        parameters,
+      });
+
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   async getSession(): Promise<Session> {
@@ -208,5 +206,29 @@ export class OpenHandsAgentAdapter implements Agent {
 
   incrementIteration(): void {
     this.state.iterationCount += 1;
+  }
+
+  private async post(path: string, body?: unknown): Promise<unknown> {
+    const url = new URL(path, this.options.serverUrl);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (this.options.apiKey) {
+      headers['Authorization'] = `Bearer ${this.options.apiKey}`;
+    }
+
+    const res = await fetch(url.toString(), {
+      method: 'POST',
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`OpenHands API error: ${res.status} ${text}`);
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    return data;
   }
 }

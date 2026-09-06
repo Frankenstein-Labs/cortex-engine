@@ -1,12 +1,3 @@
-import { RuntimeRef } from '@cortex/core';
-import { HostRuntime } from './host-runtime';
-
-export function createHostRuntime(): RuntimeRef {
-  return {
-    id: crypto.randomUUID(),
-    type: 'host',
-    capabilities: ['terminal', 'filesystem', 'processes'],
-  };
-}
-
-export { HostRuntime };
+export { HostRuntime, createHostRuntime } from './host-runtime';
+export { SshRuntime } from './ssh-runtime';
+export { ContainerRuntime } from './container-runtime';

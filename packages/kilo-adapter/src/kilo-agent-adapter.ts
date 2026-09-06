@@ -1,63 +1,20 @@
-import {
-  Agent,
-  AgentConfig,
-  AgentState,
-  AgentMessage,
-  AgentAction,
-  AgentObservation,
-  Session,
-  Task,
-  TaskResult,
-  Tool,
-  ToolContext,
-  ToolResult,
-  Runtime,
-  EventBus,
-  PermissionChecker,
-  CortexEvent,
-  EntityId,
-} from '@cortex/core';
+import { Agent, AgentConfig, AgentState, AgentMessage, AgentAction, AgentObservation, Session, Task, TaskResult, Tool, ToolContext, ToolResult, EventBus, CortexEvent, EventType } from '@cortex/core';
 
-/**
- * KiloAgentAdapter bridges a real Kilo agent into Cortex's Agent interface.
- *
- * Architecture:
- *   Cortex Agent Interface
- *        ↓
- *   KiloAgentAdapter
- *        ↓
- *   Kilo SDK / Kilo Engine
- *        ↓
- *   Kilo Agent (Effect-TS service)
- */
-export interface KiloAgentAdapterOptions {
-  /** Kilo agent ID (defaults to "build") */
-  agentId?: string;
-  /** Kilo server URL (for remote execution) */
-  serverUrl?: string;
-  /** Direct Effect layer for local execution */
-  kiloLayer?: unknown;
-  /** Optional: pre-built Kilo client */
-  kiloClient?: unknown;
+export interface KiloAdapterOptions {
+  serverUrl: string;
+  apiKey?: string;
+  defaultAgentId?: string;
 }
 
-/**
- * Creates a Cortex Agent that delegates to a Kilo agent.
- *
- * This adapter handles:
- * - Starting/stopping Kilo sessions
- * - Mapping Kilo events to Cortex events
- * - Executing Kilo tools through Cortex's tool registry
- * - Managing Kilo agent state
- */
 export class KiloAgentAdapter implements Agent {
   readonly config: AgentConfig;
   readonly state: AgentState;
   private session: Session | null = null;
   private stopped = false;
-  private options: KiloAgentAdapterOptions;
+  private options: KiloAdapterOptions;
+  private eventBus: EventBus | null = null;
 
-  constructor(config: AgentConfig, options: KiloAgentAdapterOptions = {}) {
+  constructor(config: AgentConfig, options: KiloAdapterOptions) {
     this.config = config;
     this.options = options;
     this.state = {
@@ -70,17 +27,39 @@ export class KiloAgentAdapter implements Agent {
     };
   }
 
+  setEventBus(eventBus: EventBus): void {
+    this.eventBus = eventBus;
+  }
+
   async start(): Promise<void> {
     this.state.status = 'idle';
     this.state.startedAt = new Date();
     this.state.lastActivityAt = new Date();
-    // TODO: Initialize Kilo agent via Effect layer or HTTP client
+
+    if (this.eventBus) {
+      this.eventBus.emit({
+        id: crypto.randomUUID(),
+        type: 'agent.started',
+        timestamp: new Date(),
+        source: this.config.id,
+        data: { agentId: this.config.id, name: this.config.name },
+      });
+    }
   }
 
   async stop(): Promise<void> {
     this.stopped = true;
     this.state.status = 'stopped';
-    // TODO: Stop Kilo session
+
+    if (this.eventBus) {
+      this.eventBus.emit({
+        id: crypto.randomUUID(),
+        type: 'agent.stopped',
+        timestamp: new Date(),
+        source: this.config.id,
+        data: { agentId: this.config.id },
+      });
+    }
   }
 
   async pause(): Promise<void> {
@@ -101,60 +80,142 @@ export class KiloAgentAdapter implements Agent {
     this.state.lastActivityAt = new Date();
 
     const startTime = Date.now();
-    const metrics = {
-      tokensUsed: 0,
-      toolCalls: 0,
-      durationMs: 0,
-      cost: 0,
-    };
+    const metrics = { tokensUsed: 0, toolCalls: 0, durationMs: 0, cost: 0 };
 
     try {
-      // TODO: Execute via Kilo agent
-      // 1. Create Kilo session
-      // 2. Send prompt to Kilo
-      // 3. Stream Kilo events to Cortex event bus
-      // 4. Map Kilo tool calls to Cortex tools
-      // 5. Return result
+      const session = await this.ensureSession();
 
-      const output = await this.runKiloTask(task, metrics);
+      if (this.eventBus) {
+        this.eventBus.emit({
+          id: crypto.randomUUID(),
+          type: 'task.started',
+          timestamp: new Date(),
+          source: this.config.id,
+          data: { taskId: task.id, taskName: task.name },
+        });
+      }
+
+      const result = await this.runKiloTask(task, session, metrics);
+
+      if (this.eventBus) {
+        this.eventBus.emit({
+          id: crypto.randomUUID(),
+          type: 'task.completed',
+          timestamp: new Date(),
+          source: this.config.id,
+          data: { taskId: task.id, success: true },
+        });
+      }
+
       this.state.status = 'idle';
       this.state.currentTaskId = undefined;
-      return {
-        success: true,
-        output,
-        metrics,
-      };
+      return { success: true, output: result, metrics };
     } catch (err) {
       this.state.status = 'error';
       this.state.error = err instanceof Error ? err.message : String(err);
       this.state.currentTaskId = undefined;
-      return {
-        success: false,
-        error: this.state.error,
-        metrics,
-      };
+
+      if (this.eventBus) {
+        this.eventBus.emit({
+          id: crypto.randomUUID(),
+          type: 'task.failed',
+          timestamp: new Date(),
+          source: this.config.id,
+          data: { taskId: task.id, error: this.state.error },
+        });
+      }
+
+      return { success: false, error: this.state.error, metrics };
     } finally {
       metrics.durationMs = Date.now() - startTime;
     }
   }
 
-  protected async runKiloTask(task: Task, metrics: { tokensUsed: number; toolCalls: number; durationMs: number; cost: number }): Promise<unknown> {
-    // Placeholder implementation
-    // Real implementation would:
-    // 1. Initialize Kilo Effect layer if not already done
-    // 2. Create or resume a Kilo session
-    // 3. Execute the task via Kilo's LLM streaming
-    // 4. Handle tool calls through Kilo's tool registry
-    // 5. Return the final output
+  private async ensureSession(): Promise<Session> {
+    if (!this.session) {
+      this.session = {
+        id: crypto.randomUUID(),
+        agentId: this.config.id,
+        messages: [],
+        actions: [],
+        observations: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    }
+    return this.session;
+  }
 
-    console.log(`[KiloAgentAdapter] Executing task: ${task.name}`);
-    console.log(`[KiloAgentAdapter] Agent ID: ${this.config.id}`);
-    console.log(`[KiloAgentAdapter] Kilo Agent: ${this.options.agentId || 'build'}`);
+  private async runKiloTask(task: Task, session: Session, metrics: { tokensUsed: number; toolCalls: number; durationMs: number; cost: number }): Promise<unknown> {
+    const baseUrl = this.options.serverUrl.replace(/\/$/, '');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (this.options.apiKey) {
+      headers['Authorization'] = `Bearer ${this.options.apiKey}`;
+    }
+
+    const createSessionRes = await fetch(`${baseUrl}/api/session`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        agent: this.options.defaultAgentId || 'build',
+        title: task.name,
+        model: this.config.model?.model || 'default',
+      }),
+    });
+
+    if (!createSessionRes.ok) {
+      const text = await createSessionRes.text();
+      throw new Error(`Kilo session creation failed: ${createSessionRes.status} ${text}`);
+    }
+
+    const sessionData = await createSessionRes.json() as { id: string };
+    const kiloSessionId = sessionData.id;
+
+    const promptRes = await fetch(`${baseUrl}/api/session/${kiloSessionId}/prompt`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        prompt: task.description || task.name,
+        mode: 'default',
+      }),
+    });
+
+    if (!promptRes.ok) {
+      const text = await promptRes.text();
+      throw new Error(`Kilo prompt failed: ${promptRes.status} ${text}`);
+    }
+
+    const promptData = await promptRes.json() as { usage?: { totalTokens?: number; cost?: number }; message?: unknown; toolCalls?: unknown[] };
+    metrics.tokensUsed += promptData.usage?.totalTokens || 0;
+    metrics.cost += promptData.usage?.cost || 0;
+
+    const userMsg: AgentMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: task.description || task.name,
+      timestamp: new Date(),
+    };
+    session.messages.push(userMsg);
+
+    if (promptData.message) {
+      const assistantMsg: AgentMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: typeof promptData.message === 'string' ? promptData.message : JSON.stringify(promptData.message),
+        timestamp: new Date(),
+      };
+      session.messages.push(assistantMsg);
+    }
+
+    this.state.toolCallsUsed += promptData.toolCalls?.length || 0;
 
     return {
       task,
-      agent: this.options.agentId || 'build',
-      message: 'Kilo adapter placeholder - implement with real Kilo SDK',
+      kiloSessionId,
+      response: promptData.message,
+      usage: promptData.usage,
     };
   }
 
@@ -176,30 +237,35 @@ export class KiloAgentAdapter implements Agent {
     this.state.toolCallsUsed += 1;
     this.state.lastActivityAt = new Date();
 
-    // TODO: Execute via Kilo tool registry
-    // 1. Look up tool in Kilo's tool registry
-    // 2. Execute with Kilo's sandbox policy
-    // 3. Return result mapped to Cortex ToolResult
-
-    return {
-      success: false,
-      error: 'Kilo tool execution not yet implemented',
+    const baseUrl = this.options.serverUrl.replace(/\/$/, '');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
     };
+    if (this.options.apiKey) {
+      headers['Authorization'] = `Bearer ${this.options.apiKey}`;
+    }
+
+    try {
+      const res = await fetch(`${baseUrl}/api/tool/${encodeURIComponent(toolName)}/execute`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ parameters }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        return { success: false, error: `Kilo tool failed: ${res.status} ${text}` };
+      }
+
+      const data = await res.json();
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   async getSession(): Promise<Session> {
-    if (!this.session) {
-      this.session = {
-        id: crypto.randomUUID(),
-        agentId: this.config.id,
-        messages: [],
-        actions: [],
-        observations: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-    }
-    return this.session;
+    return this.ensureSession();
   }
 
   recordAction(action: AgentAction): void {

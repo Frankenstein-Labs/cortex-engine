@@ -1,14 +1,14 @@
 import { Session, AgentMessage, AgentAction, AgentObservation, EntityId } from '@cortex/core';
 
-/**
- * KiloSessionAdapter bridges Kilo's session model into Cortex's Session interface.
- *
- * Kilo sessions are:
- * - Event-sourced (durable events in SQLite)
- * - Identified by SessionSchema.ID
- * - Managed by SessionV2.Service
- * - Have messages, events, and execution state
- */
+export interface KiloSessionData {
+  id: string;
+  title?: string;
+  agent?: string;
+  model?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export class KiloSessionAdapter implements Session {
   id: EntityId;
   agentId: EntityId;
@@ -20,12 +20,13 @@ export class KiloSessionAdapter implements Session {
   context?: Record<string, unknown>;
 
   private kiloSessionId?: string;
-  private messageMap: Map<string, EntityId> = new Map();
+  private kiloSessionData?: KiloSessionData;
 
-  constructor(kiloSessionId: string, agentId: EntityId) {
+  constructor(kiloSessionId: string, agentId: EntityId, kiloSessionData?: KiloSessionData) {
     this.id = crypto.randomUUID();
     this.kiloSessionId = kiloSessionId;
     this.agentId = agentId;
+    this.kiloSessionData = kiloSessionData;
     this.messages = [];
     this.actions = [];
     this.observations = [];
@@ -37,29 +38,15 @@ export class KiloSessionAdapter implements Session {
     return this.kiloSessionId;
   }
 
-  /**
-   * Convert a Kilo session event to a Cortex message
-   */
-  static fromKiloEvent(kiloEvent: unknown, agentId: EntityId): AgentMessage | null {
-    // TODO: Map Kilo event types to Cortex messages
-    // Kilo events include: Prompted, PromptAdmitted, Step.Started/Ended,
-    // Text.Started/Delta/Ended, Tool.Called, Tool.Success, Tool.Failed, etc.
-    return null;
+  updateFromKilo(data: KiloSessionData): void {
+    this.kiloSessionData = data;
+    this.updatedAt = new Date();
   }
 
-  /**
-   * Convert a Kilo tool call to a Cortex action
-   */
-  static fromKiloToolCall(kiloToolCall: unknown, agentId: EntityId): AgentAction | null {
-    // TODO: Map Kilo tool call to Cortex action
-    return null;
-  }
-
-  /**
-   * Convert a Kilo tool result to a Cortex observation
-   */
-  static fromKiloToolResult(kiloResult: unknown, actionId: EntityId): AgentObservation | null {
-    // TODO: Map Kilo tool result to Cortex observation
-    return null;
+  static fromKiloResponse(data: KiloSessionData, agentId: EntityId): KiloSessionAdapter {
+    const adapter = new KiloSessionAdapter(data.id, agentId, data);
+    adapter.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
+    adapter.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
+    return adapter;
   }
 }
