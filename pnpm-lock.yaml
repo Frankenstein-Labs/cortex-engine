@@ -118,10 +118,25 @@ importers:
       '@cortex/tools':
         specifier: workspace:*
         version: link:../tools
+      '@kilocode/sdk':
+        specifier: ^7.5.14
+        version: 7.5.15
+      tree-kill:
+        specifier: ^1.2.2
+        version: 1.2.2
     devDependencies:
+      '@types/jest':
+        specifier: ^29.5.0
+        version: 29.5.14
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
+      jest:
+        specifier: ^29.7.0
+        version: 29.7.0(@types/node@20.19.43)
+      ts-jest:
+        specifier: ^29.1.0
+        version: 29.4.12(@babel/core@7.29.7)(jest@29.7.0)(typescript@5.9.3)
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -143,10 +158,25 @@ importers:
       '@cortex/tools':
         specifier: workspace:*
         version: link:../tools
+      '@openhands/typescript-client':
+        specifier: ^1.39.0
+        version: 1.39.0
+      tree-kill:
+        specifier: ^1.2.2
+        version: 1.2.2
     devDependencies:
+      '@types/jest':
+        specifier: ^29.5.0
+        version: 29.5.14
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
+      jest:
+        specifier: ^29.7.0
+        version: 29.7.0(@types/node@20.19.43)
+      ts-jest:
+        specifier: ^29.1.0
+        version: 29.4.12(@babel/core@7.29.7)(jest@29.7.0)(typescript@5.9.3)
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -182,9 +212,18 @@ importers:
         specifier: ^1.15.0
         version: 1.17.0
     devDependencies:
+      '@types/jest':
+        specifier: ^29.5.0
+        version: 29.5.14
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
+      jest:
+        specifier: ^29.7.0
+        version: 29.7.0(@types/node@20.19.43)
+      ts-jest:
+        specifier: ^29.1.0
+        version: 29.4.12(@babel/core@7.29.7)(jest@29.7.0)(typescript@5.9.3)
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -830,6 +869,29 @@ packages:
       '@jridgewell/sourcemap-codec': 1.6.0
     dev: true
 
+  /@kilocode/sdk@7.5.15:
+    resolution: {integrity: sha512-EszIXuYCmasokuStRKDC33Q7TVxYV2D7LCIzkSqThGZOAAsdBeejdkbCXdxlS2iSJe+hsZpRN5fwRGbkmpJs1w==}
+    dependencies:
+      cross-spawn: 7.0.6
+    dev: false
+
+  /@openhands/typescript-client@1.39.0:
+    resolution: {integrity: sha512-AXRR9bXYYsT87NvkJCB2sLBxAjoGwt6MIQED4g5EufpXaUvY21BDyuDjNpsVtGl6WFnjbvTK1kFytkbxAe0rvw==}
+    dependencies:
+      '@openrouter/sdk': 1.2.107
+      ws: 8.21.3
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+    dev: false
+
+  /@openrouter/sdk@1.2.107:
+    resolution: {integrity: sha512-y3bFctUufE+juGXKc4NEWm5htdMwoNvrHr/6s2h0cv/eZN1JO833qKa+Dcr1crJGYbG+PIjm34nYYVdXtfCehA==}
+    requiresBuild: true
+    dependencies:
+      zod: 3.25.76
+    dev: false
+
   /@sinclair/typebox@0.27.12:
     resolution: {integrity: sha512-hhyNJ+nbR6ZR7pToHvllEFun9TL0sbL+tk/ON75lo+Xas054uez98qRbsuNt7MBCyZKK4+8Yli/OAGZhmfBZ/g==}
     dev: true
@@ -1306,7 +1368,6 @@ packages:
       path-key: 3.1.1
       shebang-command: 2.0.0
       which: 2.0.2
-    dev: true
 
   /debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -1652,7 +1713,6 @@ packages:
 
   /isexe@2.0.0:
     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
-    dev: true
 
   /istanbul-lib-coverage@3.2.2:
     resolution: {integrity: sha512-O8dpsF+r0WV/8MNRKfnmrtCWhuKjxrq2w+jpzBL5UZKTi2LeVWnWOmWRxFlesJONmc+wLAGvKQZEOanko0LFTg==}
@@ -2388,7 +2448,6 @@ packages:
   /path-key@3.1.1:
     resolution: {integrity: sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q==}
     engines: {node: '>=8'}
-    dev: true
 
   /path-parse@1.0.7:
     resolution: {integrity: sha512-LDJzPVEEEPR+y48z93A0Ed0yXb8pAByGWo/k5YYdYgpY2/2EsOsksJrq7lOHxryrVOn1ejG6oAp8ahvOIQD8sw==}
@@ -2532,12 +2591,10 @@ packages:
     engines: {node: '>=8'}
     dependencies:
       shebang-regex: 3.0.0
-    dev: true
 
   /shebang-regex@3.0.0:
     resolution: {integrity: sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==}
     engines: {node: '>=8'}
-    dev: true
 
   /signal-exit@3.0.7:
     resolution: {integrity: sha512-wnD2ZE+l+SPC/uoS0vXeE9L1+0wuaMqKlfz9AMUo38JsyLSBWSFcHR1Rri62LZc12vLr1gb3jl7iwQhgwpAbGQ==}
@@ -2693,6 +2750,11 @@ packages:
       is-number: 7.0.0
     dev: true
 
+  /tree-kill@1.2.2:
+    resolution: {integrity: sha512-L0Orpi8qGpRG//Nd+H90vFB+3iHnue1zSSGmNOOCh1GLJ7rUKVwV2HvijphGQS2UmhUZewS9VgvxYIdgr+fG1A==}
+    hasBin: true
+    dev: false
+
   /ts-jest@29.4.12(@babel/core@7.29.7)(jest@29.7.0)(typescript@5.9.3):
     resolution: {integrity: sha512-Ov6ClY53Fflh6BGAnY2DlTq1hYDrTycz2PVTXBWFW2CU+9zrEqAp9fWdGXl42EXO5RLSFAcAZ2JFKbP+zBTFfw==}
     engines: {node: ^14.15.0 || ^16.10.0 || ^18.0.0 || >=20.0.0}
@@ -2820,7 +2882,6 @@ packages:
     hasBin: true
     dependencies:
       isexe: 2.0.0
-    dev: true
 
   /wordwrap@1.0.0:
     resolution: {integrity: sha512-gvVzJFlPycKc5dZN4yPkP8w7Dc37BtP1yczEneOb4uq34pXZcvrtRTmWV8W+Ume+XCxKgbjM+nevkyFPMybd4Q==}

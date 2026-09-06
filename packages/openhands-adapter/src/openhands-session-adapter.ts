@@ -1,14 +1,5 @@
 import { Session, AgentMessage, AgentAction, AgentObservation, EntityId } from '@cortex/core';
 
-/**
- * OpenHandsSessionAdapter bridges OpenHands conversations into Cortex's Session interface.
- *
- * OpenHands conversations are:
- * - Identified by conversation_id
- * - Have events streamed via WebSocket
- * - Include messages, actions, observations
- * - Managed via REST API
- */
 export class OpenHandsSessionAdapter implements Session {
   id: EntityId;
   agentId: EntityId;
@@ -36,28 +27,15 @@ export class OpenHandsSessionAdapter implements Session {
     return this.conversationId;
   }
 
-  /**
-   * Convert OpenHands event to Cortex message
-   */
   static fromOpenHandsEvent(event: unknown, agentId: EntityId): AgentMessage | null {
-    // TODO: Map OpenHands event types
-    // OpenHands events include: ohai, agent_event, error, memory, etc.
     return null;
   }
 
-  /**
-   * Convert OpenHands action to Cortex action
-   */
   static fromOpenHandsAction(action: unknown, agentId: EntityId): AgentAction | null {
-    // TODO: Map OpenHands Action objects
     return null;
   }
 
-  /**
-   * Convert OpenHands observation to Cortex observation
-   */
   static fromOpenHandsObservation(observation: unknown, actionId: EntityId): AgentObservation | null {
-    // TODO: Map OpenHands Observation objects
     return null;
   }
 }

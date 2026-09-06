@@ -1,17 +1,18 @@
-import { EventBus, CortexEvent, CortexEventHandler, EventType, EntityId } from '@cortex/core';
+import { EventBus, CortexEvent, CortexEventHandler, EventType } from '@cortex/core';
+import { createKiloClient } from '@kilocode/sdk';
 
 export interface KiloEventAdapterOptions {
-  serverUrl: string;
+  baseUrl?: string;
   apiKey?: string;
 }
 
 export class KiloEventAdapter implements EventBus {
   private cortexHandlers: Map<EventType, Set<CortexEventHandler>> = new Map();
   private options: KiloEventAdapterOptions;
-  private eventSource: EventSource | null = null;
+  private client: ReturnType<typeof createKiloClient> | null = null;
   private connected = false;
 
-  constructor(options: KiloEventAdapterOptions) {
+  constructor(options: KiloEventAdapterOptions = {}) {
     this.options = options;
   }
 
@@ -19,36 +20,30 @@ export class KiloEventAdapter implements EventBus {
     if (this.connected) return;
     this.connected = true;
 
-    const url = new URL('/api/event', this.options.serverUrl);
-    if (this.options.apiKey) {
-      url.searchParams.set('token', this.options.apiKey);
-    }
+    const baseUrl = this.options.baseUrl ?? 'http://127.0.0.1:4096';
+    this.client = createKiloClient({ baseUrl });
 
-    this.eventSource = new EventSource(url.toString());
-
-    this.eventSource.onmessage = (event) => {
+    const consumeStream = async () => {
       try {
-        const kiloEvent = JSON.parse(event.data);
-        const cortexEvent = this.mapKiloEvent(kiloEvent);
-        if (cortexEvent) {
-          this.emitToCortexHandlers(cortexEvent);
+        const result = await this.client!.event.subscribe();
+        for await (const event of result.stream) {
+          const cortexEvent = this.mapKiloEvent(event);
+          if (cortexEvent) {
+            this.emitToCortexHandlers(cortexEvent);
+          }
         }
       } catch {
-        // ignore parse errors
+        this.connected = false;
       }
     };
-
-    this.eventSource.onerror = () => {
+    consumeStream().catch(() => {
       this.connected = false;
-    };
+    });
   }
 
   disconnect(): void {
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-      this.connected = false;
-    }
+    this.connected = false;
+    this.client = null;
   }
 
   on<T>(eventType: EventType, handler: CortexEventHandler<T>): () => void {

@@ -1,9 +1,11 @@
-import { Agent, AgentConfig, AgentState, AgentMessage, AgentAction, AgentObservation, Session, Task, TaskResult, Tool, ToolContext, ToolResult, EventBus, CortexEvent, EventType } from '@cortex/core';
+import { Agent, AgentConfig, AgentState, AgentMessage, AgentAction, AgentObservation, Session, Task, TaskResult, Tool, ToolContext, ToolResult, EventBus } from '@cortex/core';
+import { KiloRuntimeBridge } from './kilo-runtime-bridge';
 
 export interface KiloAdapterOptions {
-  serverUrl: string;
+  serverUrl?: string;
   apiKey?: string;
   defaultAgentId?: string;
+  config?: Record<string, unknown>;
 }
 
 export class KiloAgentAdapter implements Agent {
@@ -13,8 +15,10 @@ export class KiloAgentAdapter implements Agent {
   private stopped = false;
   private options: KiloAdapterOptions;
   private eventBus: EventBus | null = null;
+  private bridge: KiloRuntimeBridge;
+  private currentKiloSessionId?: string;
 
-  constructor(config: AgentConfig, options: KiloAdapterOptions) {
+  constructor(config: AgentConfig, options: KiloAdapterOptions = {}) {
     this.config = config;
     this.options = options;
     this.state = {
@@ -25,6 +29,11 @@ export class KiloAgentAdapter implements Agent {
       cost: 0,
       lastActivityAt: new Date(),
     };
+    this.bridge = new KiloRuntimeBridge({
+      hostname: options.serverUrl ? undefined : undefined,
+      port: options.serverUrl ? undefined : 4096,
+      config: options.config,
+    });
   }
 
   setEventBus(eventBus: EventBus): void {
@@ -32,6 +41,7 @@ export class KiloAgentAdapter implements Agent {
   }
 
   async start(): Promise<void> {
+    await this.bridge.start();
     this.state.status = 'idle';
     this.state.startedAt = new Date();
     this.state.lastActivityAt = new Date();
@@ -50,6 +60,7 @@ export class KiloAgentAdapter implements Agent {
   async stop(): Promise<void> {
     this.stopped = true;
     this.state.status = 'stopped';
+    await this.bridge.stop();
 
     if (this.eventBus) {
       this.eventBus.emit({
@@ -95,7 +106,36 @@ export class KiloAgentAdapter implements Agent {
         });
       }
 
-      const result = await this.runKiloTask(task, session, metrics);
+      this.currentKiloSessionId = await this.bridge.createSession({
+        title: task.name,
+        agent: this.options.defaultAgentId || 'build',
+        model: this.config.model?.model || 'default',
+      });
+
+      const result = await this.bridge.sendPrompt(this.currentKiloSessionId, task.description || task.name);
+      const resultData = result as { usage?: { totalTokens?: number; cost?: number }; message?: unknown; toolCalls?: unknown[] };
+      metrics.tokensUsed += resultData.usage?.totalTokens || 0;
+      metrics.cost += resultData.usage?.cost || 0;
+
+      const userMsg: AgentMessage = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: task.description || task.name,
+        timestamp: new Date(),
+      };
+      session.messages.push(userMsg);
+
+      if (resultData.message) {
+        const assistantMsg: AgentMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: typeof resultData.message === 'string' ? resultData.message : JSON.stringify(resultData.message),
+          timestamp: new Date(),
+        };
+        session.messages.push(assistantMsg);
+      }
+
+      this.state.toolCallsUsed += resultData.toolCalls?.length || 0;
 
       if (this.eventBus) {
         this.eventBus.emit({
@@ -146,79 +186,6 @@ export class KiloAgentAdapter implements Agent {
     return this.session;
   }
 
-  private async runKiloTask(task: Task, session: Session, metrics: { tokensUsed: number; toolCalls: number; durationMs: number; cost: number }): Promise<unknown> {
-    const baseUrl = this.options.serverUrl.replace(/\/$/, '');
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (this.options.apiKey) {
-      headers['Authorization'] = `Bearer ${this.options.apiKey}`;
-    }
-
-    const createSessionRes = await fetch(`${baseUrl}/api/session`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        agent: this.options.defaultAgentId || 'build',
-        title: task.name,
-        model: this.config.model?.model || 'default',
-      }),
-    });
-
-    if (!createSessionRes.ok) {
-      const text = await createSessionRes.text();
-      throw new Error(`Kilo session creation failed: ${createSessionRes.status} ${text}`);
-    }
-
-    const sessionData = await createSessionRes.json() as { id: string };
-    const kiloSessionId = sessionData.id;
-
-    const promptRes = await fetch(`${baseUrl}/api/session/${kiloSessionId}/prompt`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        prompt: task.description || task.name,
-        mode: 'default',
-      }),
-    });
-
-    if (!promptRes.ok) {
-      const text = await promptRes.text();
-      throw new Error(`Kilo prompt failed: ${promptRes.status} ${text}`);
-    }
-
-    const promptData = await promptRes.json() as { usage?: { totalTokens?: number; cost?: number }; message?: unknown; toolCalls?: unknown[] };
-    metrics.tokensUsed += promptData.usage?.totalTokens || 0;
-    metrics.cost += promptData.usage?.cost || 0;
-
-    const userMsg: AgentMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: task.description || task.name,
-      timestamp: new Date(),
-    };
-    session.messages.push(userMsg);
-
-    if (promptData.message) {
-      const assistantMsg: AgentMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: typeof promptData.message === 'string' ? promptData.message : JSON.stringify(promptData.message),
-        timestamp: new Date(),
-      };
-      session.messages.push(assistantMsg);
-    }
-
-    this.state.toolCallsUsed += promptData.toolCalls?.length || 0;
-
-    return {
-      task,
-      kiloSessionId,
-      response: promptData.message,
-      usage: promptData.usage,
-    };
-  }
-
   async sendMessage(message: string): Promise<AgentMessage> {
     const msg: AgentMessage = {
       id: crypto.randomUUID(),
@@ -236,32 +203,10 @@ export class KiloAgentAdapter implements Agent {
   async callTool(toolName: string, parameters: Record<string, unknown>): Promise<ToolResult> {
     this.state.toolCallsUsed += 1;
     this.state.lastActivityAt = new Date();
-
-    const baseUrl = this.options.serverUrl.replace(/\/$/, '');
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+    return {
+      success: false,
+      error: 'Kilo tool execution not yet implemented via runtime bridge',
     };
-    if (this.options.apiKey) {
-      headers['Authorization'] = `Bearer ${this.options.apiKey}`;
-    }
-
-    try {
-      const res = await fetch(`${baseUrl}/api/tool/${encodeURIComponent(toolName)}/execute`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ parameters }),
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        return { success: false, error: `Kilo tool failed: ${res.status} ${text}` };
-      }
-
-      const data = await res.json();
-      return { success: true, data };
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) };
-    }
   }
 
   async getSession(): Promise<Session> {
