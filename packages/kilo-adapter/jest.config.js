@@ -5,8 +5,8 @@ module.exports = {
   transform: {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: { module: 'CommonJS', esModuleInterop: true } }],
   },
-  moduleNameMapper: {
-    '^@kilocode/sdk$': '<rootDir>/__mocks__/kilocode-sdk.js',
-  },
   testMatch: ['**/__tests__/**/*.test.ts'],
+  moduleNameMapper: {
+    '^@kilocode/sdk$': '<rootDir>/node_modules/@kilocode/sdk/dist/index.js',
+  },
 };

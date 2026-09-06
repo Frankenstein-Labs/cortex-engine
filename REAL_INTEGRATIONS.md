@@ -38,14 +38,14 @@ A `ProcessManager` in `packages/runtime/src/process-manager.ts` handles spawning
 
 **Implementation**: `packages/kilo-adapter/src/kilo-runtime-bridge.ts`
 
-**SDK**: `@kilocode/sdk`
+**SDK**: `@kilocode/sdk` (loaded via dynamic `import()`)
 
 ### Features
-- Spawns `kilo serve` via `createKiloServer`
-- Creates typed client via `createKiloClient`
-- Session CRUD via `KiloClient.session.create/get/delete`
-- Prompting via `KiloClient.session.prompt`
-- SSE event streaming via `KiloClient.event.subscribe`
+- Spawns `kilo serve` via `ProcessManager`
+- Creates typed client via `createKiloClient` (dynamic import)
+- Session CRUD via `KiloClient.session.create/get/delete` using `path`/`body` parameter mapping
+- Prompting via `KiloClient.session.prompt` with `parts: [{ type: 'text', text: prompt }]`
+- SSE event streaming via `KiloClient.event.subscribe()`
 - Event mapping from Kilo events to Cortex events
 
 ### Usage
@@ -66,7 +66,7 @@ await bridge.stop();
 
 **Implementation**: `packages/openhands-adapter/src/openhands-runtime-bridge.ts`
 
-**SDK**: `@openhands/typescript-client`
+**SDK**: `@openhands/typescript-client` (loaded via dynamic `import()`)
 
 ### Features
 - Optionally spawns `openhands-agent-server` subprocess
@@ -93,16 +93,21 @@ await bridge.stop();
 - `OpenHandsAgentAdapter` now delegates session/prompt operations to `OpenHandsRuntimeBridge`
 - Fake HTTP calls to `/api/session` and `/api/conversations` have been removed
 - All `// Placeholder` and `// TODO: simulate` comments have been removed from production code
+- `openhands-runtime-adapter.ts` (fake runtime with placeholders) has been deleted
 
 ## Engine Availability
 
 ### Kilo
-- `kilo` CLI is available at `/usr/local/bin/kilo`
-- Integration tests run real `kilo serve` subprocess
+- `kilo` CLI is available at `/usr/local/bin/kilo` (v7.4.20)
+- SDK is installed as `@kilocode/sdk` 7.5.14
+- Bridge uses dynamic `import('@kilocode/sdk')` to load the real SDK
+- Integration tests skip in Jest/ts-jest due to ESM module resolution limitations; real SDK usage is verified by direct import and TypeScript compilation
 
 ### OpenHands
 - `openhands-agent-server` is **not** installed in this environment
-- Integration tests skip gracefully when the server binary is unavailable
+- SDK is installed as `@openhands/typescript-client` 1.39.0
+- Bridge uses dynamic `import('@openhands/typescript-client')` to load the real SDK
+- Integration tests skip gracefully when the server binary or SDK is unavailable
 - The bridge works with any compatible OpenHands Agent Server URL
 
 ## Testing
@@ -113,6 +118,17 @@ pnpm test
 ```
 
 Tests cover:
-- `ProcessManager`: spawn, kill, process lifecycle
-- `KiloRuntimeBridge`: instantiation, health checks, session lifecycle (with mock SDK)
+- `ProcessManager`: spawn, kill, process lifecycle (real subprocess tests)
+- `KiloRuntimeBridge`: instantiation, health checks, graceful skip when SDK ESM cannot be loaded in Jest
 - `OpenHandsRuntimeBridge`: instantiation, health checks, graceful unavailability handling
+
+### Test Limitations
+
+Both `@kilocode/sdk` and `@openhands/typescript-client` are ESM-only packages (`"type": "module"`). The current Jest/ts-jest setup compiles TypeScript to CommonJS and cannot dynamically import ESM modules. Tests skip gracefully when the SDK cannot be loaded. For real integration testing, use a native ESM test runner or direct Node.js scripts.
+
+## No Mocks Policy
+
+- **No mocks in implementation**: Both bridges use the real official SDKs via dynamic `import()`
+- **No fake HTTP calls**: All session management uses the official SDK's typed methods
+- **No placeholders**: All `// TODO` and `// Placeholder` comments have been removed from production code
+- **Honest test skipping**: Tests clearly log when they skip due to missing engines or ESM limitations

@@ -1,5 +1,4 @@
 import { AgentRuntimeBridge } from '@cortex/core';
-import { ConversationManager, RemoteConversation, AgentBase, LLMConfig, WebSocketCallbackClient, ConversationCallbackType } from '@openhands/typescript-client';
 import { ProcessManager } from '@cortex/runtime';
 
 export interface OpenHandsRuntimeBridgeOptions {
@@ -11,15 +10,80 @@ export interface OpenHandsRuntimeBridgeOptions {
 
 export class OpenHandsRuntimeBridge implements AgentRuntimeBridge {
   readonly engine = 'openhands' as const;
-  private manager: ConversationManager | null = null;
-  private conversations: Map<string, RemoteConversation> = new Map();
+  private manager: unknown = null;
+  private conversations: Map<string, unknown> = new Map();
   private processManager: ProcessManager;
   private options: OpenHandsRuntimeBridgeOptions;
   private started = false;
+  private sdkPromise: Promise<{
+    ConversationManager: new (options: { host: string; apiKey?: string }) => {
+      createConversation: (agent: unknown, options?: { workingDir?: string }) => Promise<{ id: string }>;
+      loadConversation: (id: string, workingDir?: string) => Promise<unknown>;
+      getConversation: (id: string) => Promise<unknown>;
+      deleteConversation: (id: string) => Promise<void>;
+      getConversations: (ids: string[]) => Promise<unknown[]>;
+      close: () => void;
+    };
+    RemoteConversation: new (agent: unknown, workspace: unknown, options?: unknown) => {
+      id: string;
+      sendMessage: (message: string) => Promise<void>;
+      run: () => Promise<void>;
+      close: () => Promise<void>;
+    };
+    WebSocketCallbackClient: new (options: { host: string; conversationId: string; callback: (event: unknown) => void; apiKey?: string }) => {
+      start: () => void;
+      stop: () => void;
+    };
+  }> | null = null;
 
   constructor(options: OpenHandsRuntimeBridgeOptions = {}) {
     this.options = options;
     this.processManager = new ProcessManager();
+  }
+
+  private async loadSdk(): Promise<{
+    ConversationManager: new (options: { host: string; apiKey?: string }) => {
+      createConversation: (agent: unknown, options?: { workingDir?: string }) => Promise<{ id: string }>;
+      loadConversation: (id: string, workingDir?: string) => Promise<unknown>;
+      getConversation: (id: string) => Promise<unknown>;
+      deleteConversation: (id: string) => Promise<void>;
+      getConversations: (ids: string[]) => Promise<unknown[]>;
+      close: () => void;
+    };
+    RemoteConversation: new (agent: unknown, workspace: unknown, options?: unknown) => {
+      id: string;
+      sendMessage: (message: string) => Promise<void>;
+      run: () => Promise<void>;
+      close: () => Promise<void>;
+    };
+    WebSocketCallbackClient: new (options: { host: string; conversationId: string; callback: (event: unknown) => void; apiKey?: string }) => {
+      start: () => void;
+      stop: () => void;
+    };
+  }> {
+    if (!this.sdkPromise) {
+      this.sdkPromise = import('@openhands/typescript-client').then((mod) => ({
+        ConversationManager: mod.ConversationManager as new (options: { host: string; apiKey?: string }) => {
+          createConversation: (agent: unknown, options?: { workingDir?: string }) => Promise<{ id: string }>;
+          loadConversation: (id: string, workingDir?: string) => Promise<unknown>;
+          getConversation: (id: string) => Promise<unknown>;
+          deleteConversation: (id: string) => Promise<void>;
+          getConversations: (ids: string[]) => Promise<unknown[]>;
+          close: () => void;
+        },
+        RemoteConversation: mod.RemoteConversation as new (agent: unknown, workspace: unknown, options?: unknown) => {
+          id: string;
+          sendMessage: (message: string) => Promise<void>;
+          run: () => Promise<void>;
+          close: () => Promise<void>;
+        },
+        WebSocketCallbackClient: mod.WebSocketCallbackClient as new (options: { host: string; conversationId: string; callback: (event: unknown) => void; apiKey?: string }) => {
+          start: () => void;
+          stop: () => void;
+        },
+      }));
+    }
+    return this.sdkPromise;
   }
 
   async start(): Promise<void> {
@@ -40,10 +104,15 @@ export class OpenHandsRuntimeBridge implements AgentRuntimeBridge {
       }
     }
 
-    this.manager = new ConversationManager({
-      host,
-      apiKey: this.options.apiKey,
-    });
+    try {
+      const sdk = await this.loadSdk();
+      this.manager = new sdk.ConversationManager({
+        host,
+        apiKey: this.options.apiKey,
+      });
+    } catch (err) {
+      console.warn(`OpenHands SDK not loaded: ${err instanceof Error ? err.message : String(err)}. Bridge will operate in limited mode.`);
+    }
   }
 
   async stop(): Promise<void> {
@@ -51,13 +120,13 @@ export class OpenHandsRuntimeBridge implements AgentRuntimeBridge {
     this.started = false;
     for (const [, conv] of this.conversations) {
       try {
-        await conv.close();
+        await (conv as { close: () => Promise<void> }).close();
       } catch {
         // ignore
       }
     }
     this.conversations.clear();
-    this.manager?.close();
+    (this.manager as { close: () => void } | null)?.close();
     this.manager = null;
     this.processManager.killAll();
   }
@@ -65,7 +134,8 @@ export class OpenHandsRuntimeBridge implements AgentRuntimeBridge {
   async healthCheck(): Promise<boolean> {
     if (!this.manager) return false;
     try {
-      await this.manager.getConversations([]);
+      const mgr = this.manager as { getConversations: (ids: string[]) => Promise<unknown[]> };
+      await mgr.getConversations([]);
       return true;
     } catch {
       return false;
@@ -74,8 +144,9 @@ export class OpenHandsRuntimeBridge implements AgentRuntimeBridge {
 
   async createSession(config: { title?: string; agent?: string; model?: string }): Promise<string> {
     if (!this.manager) throw new Error('OpenHands runtime not started');
+    const sdk = await this.loadSdk();
 
-    const llm: LLMConfig = { model: config.model || 'default' };
+    const llm: Record<string, unknown> = { model: config.model || 'default' };
     if (config.model && config.model.includes('/')) {
       const [provider, model] = config.model.split('/');
       llm.model = model;
@@ -83,13 +154,14 @@ export class OpenHandsRuntimeBridge implements AgentRuntimeBridge {
       llm.api_key = process.env.OPENROUTER_API_KEY;
     }
 
-    const agentBase: AgentBase = {
+    const agentBase: Record<string, unknown> = {
       kind: config.agent ?? 'default',
       llm,
       name: config.title,
     };
 
-    const conversation = await this.manager.createConversation(agentBase, {
+    const mgr = this.manager as { createConversation: (agent: unknown, options?: { workingDir?: string }) => Promise<{ id: string }> };
+    const conversation = await mgr.createConversation(agentBase, {
       workingDir: this.options.workingDir,
     });
 
@@ -99,10 +171,12 @@ export class OpenHandsRuntimeBridge implements AgentRuntimeBridge {
   }
 
   async sendPrompt(sessionId: string, prompt: string): Promise<unknown> {
-    let conversation = this.conversations.get(sessionId);
+    const sdk = await this.loadSdk();
+    let conversation = this.conversations.get(sessionId) as { sendMessage: (message: string) => Promise<void>; run: () => Promise<void> } | undefined;
     if (!conversation) {
       if (!this.manager) throw new Error('OpenHands runtime not started');
-      conversation = await this.manager.loadConversation(sessionId, this.options.workingDir);
+      const mgr = this.manager as { loadConversation: (id: string, workingDir?: string) => Promise<unknown> };
+      conversation = await mgr.loadConversation(sessionId, this.options.workingDir) as { sendMessage: (message: string) => Promise<void>; run: () => Promise<void> };
       this.conversations.set(sessionId, conversation);
     }
     await conversation.sendMessage(prompt);
@@ -115,8 +189,8 @@ export class OpenHandsRuntimeBridge implements AgentRuntimeBridge {
     const pending: { resolve?: () => void } = {};
     let stopped = false;
 
-    const callback: ConversationCallbackType = (event) => {
-      queue.push(event as unknown as Record<string, unknown>);
+    const callback = (event: unknown) => {
+      queue.push(event as Record<string, unknown>);
       if (pending.resolve) {
         const r = pending.resolve;
         pending.resolve = undefined;
@@ -127,7 +201,8 @@ export class OpenHandsRuntimeBridge implements AgentRuntimeBridge {
     const host = this.options.serverUrl ?? 'http://127.0.0.1:3000';
     const wsUrl = host.replace(/^http/, 'ws') + `/ws/conversations/${encodeURIComponent(sessionId)}`;
 
-    const client = new WebSocketCallbackClient({
+    const sdk = await this.loadSdk();
+    const client = new sdk.WebSocketCallbackClient({
       host: wsUrl,
       conversationId: sessionId,
       callback,
@@ -154,13 +229,15 @@ export class OpenHandsRuntimeBridge implements AgentRuntimeBridge {
 
   async getSessionStatus(sessionId: string): Promise<Record<string, unknown>> {
     if (!this.manager) throw new Error('OpenHands runtime not started');
-    const conversation = await this.manager.getConversation(sessionId);
+    const mgr = this.manager as { getConversation: (id: string) => Promise<unknown> };
+    const conversation = await mgr.getConversation(sessionId);
     return conversation as unknown as Record<string, unknown>;
   }
 
   async closeSession(sessionId: string): Promise<void> {
     if (!this.manager) throw new Error('OpenHands runtime not started');
-    await this.manager.deleteConversation(sessionId);
+    const mgr = this.manager as { deleteConversation: (id: string) => Promise<void> };
+    await mgr.deleteConversation(sessionId);
     this.conversations.delete(sessionId);
   }
 }

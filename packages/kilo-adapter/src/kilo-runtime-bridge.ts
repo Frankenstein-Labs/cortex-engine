@@ -1,5 +1,4 @@
 import { AgentRuntimeBridge } from '@cortex/core';
-import { createKiloServer, createKiloClient } from '@kilocode/sdk';
 import { ProcessManager } from '@cortex/runtime';
 
 export interface KiloRuntimeBridgeOptions {
@@ -11,11 +10,12 @@ export interface KiloRuntimeBridgeOptions {
 
 export class KiloRuntimeBridge implements AgentRuntimeBridge {
   readonly engine = 'kilo' as const;
-  private client: ReturnType<typeof createKiloClient> | null = null;
+  private client: unknown = null;
   private serverUrl: string | null = null;
   private processManager: ProcessManager;
   private options: KiloRuntimeBridgeOptions;
   private started = false;
+  private sdkPromise: Promise<{ createKiloClient: (config: { baseUrl: string }) => unknown }> | null = null;
 
   constructor(options: KiloRuntimeBridgeOptions = {}) {
     this.options = {
@@ -25,6 +25,24 @@ export class KiloRuntimeBridge implements AgentRuntimeBridge {
       signal: options.signal,
     };
     this.processManager = new ProcessManager();
+  }
+
+  private async loadSdk(): Promise<{ createKiloClient: (config: { baseUrl: string }) => unknown }> {
+    if (!this.sdkPromise) {
+      try {
+        const mod = await import('@kilocode/sdk');
+        this.sdkPromise = Promise.resolve({
+          createKiloClient: mod.createKiloClient as (config: { baseUrl: string }) => unknown,
+        });
+      } catch (err) {
+        const sdkPath = require('path').join(__dirname, '..', 'node_modules', '@kilocode/sdk', 'dist', 'index.js');
+        const mod = await import(sdkPath);
+        this.sdkPromise = Promise.resolve({
+          createKiloClient: mod.createKiloClient as (config: { baseUrl: string }) => unknown,
+        });
+      }
+    }
+    return this.sdkPromise;
   }
 
   async start(): Promise<void> {
@@ -44,7 +62,8 @@ export class KiloRuntimeBridge implements AgentRuntimeBridge {
     }
 
     this.serverUrl = `http://${this.options.hostname}:${this.options.port}`;
-    this.client = createKiloClient({ baseUrl: this.serverUrl });
+    const sdk = await this.loadSdk();
+    this.client = sdk.createKiloClient({ baseUrl: this.serverUrl });
   }
 
   async stop(): Promise<void> {
@@ -58,7 +77,8 @@ export class KiloRuntimeBridge implements AgentRuntimeBridge {
   async healthCheck(): Promise<boolean> {
     if (!this.client) return false;
     try {
-      await this.client.session.status();
+      const session = (this.client as { session: { status: () => Promise<unknown> } }).session;
+      await session.status();
       return true;
     } catch {
       return false;
@@ -67,9 +87,11 @@ export class KiloRuntimeBridge implements AgentRuntimeBridge {
 
   async createSession(config: { title?: string; agent?: string; model?: string }): Promise<string> {
     if (!this.client) throw new Error('Kilo runtime not started');
-    const result = await this.client.session.create({
+    const session = (this.client as { session: { create: (params: { body: { title?: string; agent?: string } }) => { data: { id: string } } } }).session;
+    const result = await session.create({
       body: {
         title: config.title,
+        agent: config.agent,
       },
     });
     if (!result.data) {
@@ -80,8 +102,9 @@ export class KiloRuntimeBridge implements AgentRuntimeBridge {
 
   async sendPrompt(sessionId: string, prompt: string): Promise<unknown> {
     if (!this.client) throw new Error('Kilo runtime not started');
-    const result = await this.client.session.prompt({
-      path: { id: sessionId },
+    const session = (this.client as { session: { prompt: (params: { path: { sessionID: string }; body: { parts: Array<{ type: string; text: string }> } }) => { data: unknown } } }).session;
+    const result = await session.prompt({
+      path: { sessionID: sessionId },
       body: {
         parts: [{ type: 'text', text: prompt }],
       },
@@ -91,24 +114,27 @@ export class KiloRuntimeBridge implements AgentRuntimeBridge {
 
   async *streamEvents(sessionId: string): AsyncIterable<Record<string, unknown>> {
     if (!this.client) throw new Error('Kilo runtime not started');
-    const result = await this.client.event.subscribe();
-    for await (const event of result.stream) {
-      yield event as Record<string, unknown>;
+    const event = (this.client as { event: { subscribe: () => Promise<{ stream: AsyncIterable<unknown> }> } }).event;
+    const result = await event.subscribe();
+    for await (const evt of result.stream) {
+      yield evt as Record<string, unknown>;
     }
   }
 
   async getSessionStatus(sessionId: string): Promise<Record<string, unknown>> {
     if (!this.client) throw new Error('Kilo runtime not started');
-    const result = await this.client.session.get({
-      path: { id: sessionId },
+    const session = (this.client as { session: { get: (params: { path: { sessionID: string } }) => { data: unknown } } }).session;
+    const result = await session.get({
+      path: { sessionID: sessionId },
     });
     return result.data as unknown as Record<string, unknown>;
   }
 
   async closeSession(sessionId: string): Promise<void> {
     if (!this.client) throw new Error('Kilo runtime not started');
-    await this.client.session.delete({
-      path: { id: sessionId },
+    const session = (this.client as { session: { delete: (params: { path: { sessionID: string } }) => Promise<void> } }).session;
+    await session.delete({
+      path: { sessionID: sessionId },
     });
   }
 }
