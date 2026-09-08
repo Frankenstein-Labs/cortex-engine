@@ -24,7 +24,8 @@
       "@cortex/cli": ["./packages/cli/src"],
       "@cortex/kilo-adapter": ["./packages/kilo-adapter/src"],
       "@cortex/openhands-adapter": ["./packages/openhands-adapter/src"],
-      "@cortex/vm-runtime": ["./packages/vm-runtime/src"]
+      "@cortex/vm-runtime": ["./packages/vm-runtime/src"],
+      "@cortex/qwen3-omni-adapter": ["./packages/qwen3-omni-adapter/src"]
     }
   },
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
