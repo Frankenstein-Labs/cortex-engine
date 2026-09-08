@@ -10,7 +10,8 @@
     { "path": "../agent" },
     { "path": "../orchestrator" },
     { "path": "../runtime" },
-    { "path": "../tools" }
+    { "path": "../tools" },
+    { "path": "../qwen3-omni-adapter" }
   ],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

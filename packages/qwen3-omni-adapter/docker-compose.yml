@@ -1,0 +1,24 @@
+services:
+  qwen3-omni:
+    image: qwenllm/qwen3-omni:3-cu124
+    container_name: cortex-qwen3-omni
+    ports:
+      - "8000:8000"
+    environment:
+      HF_HOME: /data/huggingface
+    volumes:
+      - huggingface-cache:/data/huggingface
+    shm_size: "4gb"
+    command: >-
+      bash -lc "vllm serve Qwen/Qwen3-Omni-30B-A3B-Instruct
+      --host 0.0.0.0 --port 8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  huggingface-cache:
