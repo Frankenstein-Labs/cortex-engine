@@ -8,6 +8,7 @@ import { DefaultOrchestrator, DefaultAgentCommunication } from '@cortex/orchestr
 import { HostRuntime, createHostRuntime } from '@cortex/runtime';
 import { ReadFileTool, WriteFileTool, TerminalTool, GitStatusTool, GitDiffTool, GitCommitTool } from '@cortex/tools';
 import { ToolRegistry } from '@cortex/core';
+import { Qwen3OmniAgent, QWEN3_OMNI_MODEL } from '@cortex/qwen3-omni-adapter';
 import { v4 as uuidv4 } from 'uuid';
 
 class SimpleCortexAgent extends AgentRuntime {
@@ -60,7 +61,7 @@ program
   .command('run')
   .description('Run a mission')
   .argument('<mission>', 'Mission description or file path')
-  .option('--agent <type>', 'Agent type (kilo, openhands, cortex)', 'cortex')
+  .option('--agent <type>', 'Agent type (kilo, openhands, cortex, qwen3-omni)', 'cortex')
   .option('--role <role>', 'Agent role', 'developer')
   .option('--max-agents <n>', 'Maximum number of agents', '2')
   .action(async (mission, options) => {
@@ -89,7 +90,9 @@ program
       name: `Cortex-${options.role}`,
       role: options.role as any,
       engine: options.agent as any,
-      model: { id: 'default', provider: 'custom', model: 'local' } as any,
+      model: options.agent === 'qwen3-omni'
+        ? { id: QWEN3_OMNI_MODEL, provider: 'custom', model: QWEN3_OMNI_MODEL, baseUrl: process.env.QWEN3_OMNI_BASE_URL ?? 'http://127.0.0.1:8000/v1' }
+        : { id: 'default', provider: 'custom', model: 'local' } as any,
       permissions: { id: uuidv4(), name: 'default', permissions: [], defaultEffect: 'allow' } as any,
       tools: fsTools.map((t) => t.name),
       runtime: runtimeRef,
@@ -99,7 +102,9 @@ program
       maxIterations: 10,
     };
 
-    const agent = new SimpleCortexAgent(agentConfig, hostRuntime, toolRegistry);
+    const agent = options.agent === 'qwen3-omni'
+      ? new Qwen3OmniAgent(agentConfig)
+      : new SimpleCortexAgent(agentConfig, hostRuntime, toolRegistry);
     pool.registerAgent(agent);
 
     const orchestrator = new DefaultOrchestrator(pool, taskGraph, eventBus, communication);

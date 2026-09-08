@@ -11,7 +11,8 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {
-    "@cortex/core": "workspace:*"
+    "@cortex/core": "workspace:*",
+    "@cortex/agent": "workspace:*"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",

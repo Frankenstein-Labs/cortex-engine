@@ -126,3 +126,5 @@ function extractText(content: unknown): string {
   if (!Array.isArray(content)) return content == null ? '' : String(content);
   return content.map((part) => typeof part === 'string' ? part : part?.text ?? '').join('');
 }
+
+export { Qwen3OmniAgent } from './qwen-agent';

@@ -43,3 +43,19 @@ console.log(answer.output);
 Variables prises en charge : `QWEN3_OMNI_BASE_URL`, `QWEN3_OMNI_MODEL` et `QWEN3_OMNI_API_KEY`.
 
 L’adapter prend en charge le texte, les images, l’audio et la vidéo au format de contenu Chat Completions. Les appels `stream: true` sont réservés à une future API de streaming dédiée ; utilisez `stream: false` pour l’API actuelle.
+
+## Utiliser Qwen comme intelligence de Cortex
+
+Après compilation du workspace, le CLI peut déléguer une mission directement à Qwen3-Omni :
+
+```bash
+pnpm --filter @cortex/cli start run --agent qwen3-omni "Analyse ce projet et propose les prochaines étapes"
+```
+
+Pour démarrer le serveur GPU inclus dans ce package :
+
+```bash
+docker compose -f packages/qwen3-omni-adapter/docker-compose.yml up -d
+```
+
+Le serveur télécharge les poids dans le volume `huggingface-cache`. Cette commande nécessite Docker avec NVIDIA Container Toolkit, un GPU compatible et suffisamment de mémoire pour Qwen3-Omni-30B-A3B.

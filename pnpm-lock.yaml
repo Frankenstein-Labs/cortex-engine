@@ -38,6 +38,9 @@ importers:
       '@cortex/orchestrator':
         specifier: workspace:*
         version: link:../orchestrator
+      '@cortex/qwen3-omni-adapter':
+        specifier: workspace:*
+        version: link:../qwen3-omni-adapter
       '@cortex/runtime':
         specifier: workspace:*
         version: link:../runtime
@@ -205,6 +208,9 @@ importers:
 
   packages/qwen3-omni-adapter:
     dependencies:
+      '@cortex/agent':
+        specifier: workspace:*
+        version: link:../agent
       '@cortex/core':
         specifier: workspace:*
         version: link:../core

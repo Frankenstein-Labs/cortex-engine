@@ -244,7 +244,7 @@ export interface AgentConfig {
   id: EntityId;
   name: string;
   role: AgentRole | string;
-  engine: 'kilo' | 'openhands' | 'cortex';
+  engine: 'kilo' | 'openhands' | 'cortex' | 'qwen3-omni';
   model: ModelRef;
   permissions: PermissionPolicy;
   tools: string[];
