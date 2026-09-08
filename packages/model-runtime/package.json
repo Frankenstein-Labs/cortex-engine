@@ -1,19 +1,18 @@
 {
-  "name": "@cortex/qwen3-omni-adapter",
+  "name": "@cortex/model-runtime",
   "version": "0.1.0",
   "private": true,
-  "description": "Qwen3-Omni adapter for Cortex Engine via an OpenAI-compatible vLLM endpoint",
+  "description": "Common model runtime contracts and OpenAI-compatible implementation for Cortex Engine",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "lint": "echo 'no lint configured'"
   },
   "dependencies": {
-    "@cortex/core": "workspace:*",
-    "@cortex/agent": "workspace:*",
-    "@cortex/model-runtime": "workspace:*"
+    "@cortex/core": "workspace:*"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",

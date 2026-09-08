@@ -25,6 +25,8 @@
       "@cortex/kilo-adapter": ["./packages/kilo-adapter/src"],
       "@cortex/openhands-adapter": ["./packages/openhands-adapter/src"],
       "@cortex/vm-runtime": ["./packages/vm-runtime/src"],
+      "@cortex/model-runtime": ["./packages/model-runtime/src"],
+      "@cortex/model-registry": ["./packages/model-registry/src"],
       "@cortex/qwen3-omni-adapter": ["./packages/qwen3-omni-adapter/src"]
     }
   },
